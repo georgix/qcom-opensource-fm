@@ -902,7 +902,7 @@ public class FMRadioService extends Service
            boolean bTempSpeaker = mSpeakerPhoneOn; //need to restore SpeakerPhone
            boolean bTempMute = mMuted;// need to restore Mute status
            int bTempCall = mCallStatus;//need to restore call status
-           if (fmOff()) {
+           if (isFmOn() && fmOff()) {
                if((mServiceInUse) && (mCallbacks != null)) {
                    try {
                         mCallbacks.onDisabled();
@@ -980,6 +980,15 @@ public class FMRadioService extends Service
       }
  };
 
+   private Handler mSpeakerDisableHandler = new Handler();
+
+   private Runnable mSpeakerDisableTask = new Runnable() {
+      public void run() {
+         Log.v(LOGTAG, "Disabling Speaker");
+         AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
+      }
+   };
+
    private Handler mDelayedStopHandler = new Handler() {
       @Override
       public void handleMessage(Message msg) {
@@ -1016,19 +1025,20 @@ public class FMRadioService extends Service
                       //intentional fall through.
                   case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT");
-                      if (mSpeakerPhoneOn) {
-                          mSpeakerPhoneOn = false;
-                          if (isAnalogModeSupported()) {
-                              setAudioPath(true);
-                          }
-                          AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
-                      }
-                      if(true == isFmRecordingOn())
+                      if (true == isFmRecordingOn())
                           stopRecording();
-                      if(true == mPlaybackInProgress) {
-                          if (mMuted)
-                              unMute();
+                      if (mSpeakerPhoneOn) {
+                         mSpeakerDisableHandler.removeCallbacks(mSpeakerDisableTask);
+                         mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
+                      }
+                      if (true == mPlaybackInProgress) {
+                          if(mMuted)
+                             unMute();
                           stopFM();
+                      }
+                      if (mSpeakerPhoneOn) {
+                          if (isAnalogModeSupported())
+                              setAudioPath(false);
                       }
                       mStoppedOnFocusLoss = true;
                       break;
@@ -1388,6 +1398,74 @@ public class FMRadioService extends Service
       public boolean setIntfDetHighTh(int intfHighTh)
       {
           return (mService.get().setIntfDetHighTh(intfHighTh));
+      }
+      public int getSearchAlgoType()
+      {
+          return (mService.get().getSearchAlgoType());
+      }
+      public boolean setSearchAlgoType(int searchType)
+      {
+          return (mService.get().setSearchAlgoType(searchType));
+      }
+      public int getSinrFirstStage()
+      {
+          return (mService.get().getSinrFirstStage());
+      }
+      public boolean setSinrFirstStage(int sinr)
+      {
+          return (mService.get().setSinrFirstStage(sinr));
+      }
+      public int getRmssiFirstStage()
+      {
+          return (mService.get().getRmssiFirstStage());
+      }
+      public boolean setRmssiFirstStage(int rmssi)
+      {
+          return (mService.get().setRmssiFirstStage(rmssi));
+      }
+      public int getCFOMeanTh()
+      {
+          return (mService.get().getCFOMeanTh());
+      }
+      public boolean setCFOMeanTh(int th)
+      {
+          return (mService.get().setCFOMeanTh(th));
+      }
+      public int getSinrSamplesCnt()
+      {
+          return (mService.get().getSinrSamplesCnt());
+      }
+      public int getSinrTh()
+      {
+          return (mService.get().getSinrTh());
+      }
+      public int getAfJmpRmssiTh()
+      {
+          return (mService.get().getAfJmpRmssiTh());
+      }
+      public boolean setAfJmpRmssiTh(int afJmpRmssiTh)
+      {
+          return (mService.get().setAfJmpRmssiTh(afJmpRmssiTh));
+      }
+      public int getGoodChRmssiTh()
+      {
+          return (mService.get().getGoodChRmssiTh());
+      }
+      public boolean setGoodChRmssiTh(int gdChRmssiTh)
+      {
+          return (mService.get().setGoodChRmssiTh(gdChRmssiTh));
+      }
+      public int getAfJmpRmssiSamplesCnt()
+      {
+          return (mService.get().getAfJmpRmssiSamplesCnt());
+      }
+      public boolean setAfJmpRmssiSamplesCnt(int afJmpRmssiSmplsCnt)
+      {
+          return (mService.get().setAfJmpRmssiSamplesCnt(afJmpRmssiSmplsCnt));
+      }
+      public boolean setRxRepeatCount(int count)
+      {
+           return (mService.get().setRxRepeatCount(count));
       }
    }
    private final IBinder mBinder = new ServiceStub(this);
@@ -2702,7 +2780,103 @@ public class FMRadioService extends Service
       else
          return false;
    }
+   public int getSearchAlgoType() {
+       if(mReceiver != null)
+          return mReceiver.getSearchAlgoType();
+       else
+          return -1;
+   }
+   public boolean setSearchAlgoType(int searchType) {
+        if(mReceiver != null)
+           return mReceiver.setSearchAlgoType(searchType);
+        else
+           return false;
+   }
+   public int getSinrFirstStage() {
+        if(mReceiver != null)
+           return mReceiver.getSinrFirstStage();
+        else
+           return Integer.MAX_VALUE;
+   }
+   public boolean setSinrFirstStage(int sinr) {
+        if(mReceiver != null)
+           return mReceiver.setSinrFirstStage(sinr);
+        else
+           return false;
+   }
+   public int getRmssiFirstStage() {
+        if(mReceiver != null)
+           return mReceiver.getRmssiFirstStage();
+        else
+           return Integer.MAX_VALUE;
+   }
+   public boolean setRmssiFirstStage(int rmssi) {
+         if(mReceiver != null)
+            return mReceiver.setRmssiFirstStage(rmssi);
+         else
+            return false;
+   }
+   public int getCFOMeanTh() {
+          if(mReceiver != null)
+             return mReceiver.getCFOMeanTh();
+          else
+             return Integer.MAX_VALUE;
+   }
+   public boolean setCFOMeanTh(int th) {
+          if(mReceiver != null)
+             return mReceiver.setCFOMeanTh(th);
+          else
+             return false;
+   }
+   public int getSinrSamplesCnt() {
+          if(mReceiver != null)
+             return mReceiver.getSINRsamples();
+          else
+             return Integer.MAX_VALUE;
+   }
+   public int getSinrTh() {
+          if(mReceiver != null)
+             return mReceiver.getSINRThreshold();
+          else
+             return Integer.MAX_VALUE;
+   }
 
+   boolean setAfJmpRmssiTh(int afJmpRmssiTh) {
+          if(mReceiver != null)
+             return mReceiver.setAFJumpRmssiTh(afJmpRmssiTh);
+          else
+             return false;
+   }
+   boolean setGoodChRmssiTh(int gdChRmssiTh) {
+          if(mReceiver != null)
+             return mReceiver.setGdChRmssiTh(gdChRmssiTh);
+          else
+             return false;
+   }
+   boolean setAfJmpRmssiSamplesCnt(int afJmpRmssiSmplsCnt) {
+          if(mReceiver != null)
+             return mReceiver.setAFJumpRmssiSamples(afJmpRmssiSmplsCnt);
+          else
+             return false;
+   }
+   int getAfJmpRmssiTh() {
+          if(mReceiver != null)
+             return mReceiver.getAFJumpRmssiTh();
+          else
+             return Integer.MIN_VALUE;
+   }
+   int getGoodChRmssiTh() {
+          if(mReceiver != null)
+             return mReceiver.getGdChRmssiTh();
+          else
+             return Integer.MAX_VALUE;
+   }
+   int getAfJmpRmssiSamplesCnt() {
+          if(mReceiver != null)
+             return mReceiver.getAFJumpRmssiSamples();
+          else
+             return Integer.MIN_VALUE;
+   }
    private void setAlarmSleepExpired (long duration) {
        Intent i = new Intent(SLEEP_EXPIRED_ACTION);
        AlarmManager am = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
@@ -2746,6 +2920,13 @@ public class FMRadioService extends Service
        cancelAlarmRecordTimeout();
        cancelAlarmDealyedServiceStop();
    }
+   public boolean setRxRepeatCount(int count) {
+      if(mReceiver != null)
+         return mReceiver.setPSRxRepeatCount(count);
+      else
+         return false;
+   }
+
    //handling the sleep and record stop when FM App not in focus
    private void delayedStop(long duration, int nType) {
        int whatId = (nType == STOP_SERVICE) ? STOPSERVICE_ONSLEEP: STOPRECORD_ONTIMEOUT;
