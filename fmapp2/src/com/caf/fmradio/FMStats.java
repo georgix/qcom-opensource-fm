@@ -59,6 +59,16 @@ import android.app.AlertDialog;
 import android.app.Dialog;
 import android.view.LayoutInflater;
 import android.content.DialogInterface;
+import android.os.PowerManager;
+import android.os.PowerManager.WakeLock;
+import android.app.AlarmManager;
+import android.app.PendingIntent;
+import android.content.BroadcastReceiver;
+import android.content.IntentFilter;
+import android.view.Menu;
+import android.view.MenuItem;
+import android.view.MenuInflater;
+import android.os.SystemClock;
 
 import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
@@ -68,6 +78,8 @@ import java.util.HashMap;
 import android.os.SystemProperties;
 import java.io.BufferedReader;
 import java.io.FileReader;
+import java.util.Formatter;
+import java.util.Locale;
 
 public class FMStats extends Activity  {
 
@@ -89,6 +101,7 @@ public class FMStats extends Activity  {
       public int lFreq;
       public int hFreq;
       public int Spacing;
+      public int cur_freq;
     }
     /* Data structure for Result*/
     private class Result {
@@ -169,6 +182,8 @@ public class FMStats extends Activity  {
     private Thread mMultiUpdateThread = null;
     private static final int STATUS_UPDATE = 1;
     private static final int STATUS_DONE = 2;
+    private static final int RECORDTIMER_UPDATE = 3;
+    private static final int RECORDTIMER_EXPIRED = 4;
     private static final int STOP_ROW_ID = 200;
     private static final int NEW_ROW_ID = 300;
     private int mStopIds = STOP_ROW_ID;
@@ -222,7 +237,27 @@ public class FMStats extends Activity  {
 
     private int curSweepMthd = 0;
 
+    private Thread mRecordUpdateHandlerThread = null;
+    boolean mRecording = false;
+
+
+    private static StringBuilder sFormatBuilder = new StringBuilder();
+    private static Formatter sFormatter = new Formatter(sFormatBuilder, Locale
+                                                       .getDefault());
+    private static final Object[] sTimeArgs = new Object[5];
+
     private final String FREQ_LIST_FILE_NAME = "/freq_list_comma_separated.txt";
+    private static final String BAND_SWEEP_START_DELAY_TIMEOUT = "com.caf.fmradio.SWEEP_START_DELAY_EXP";
+    private static final String BAND_SWEEP_DWELL_DELAY_TIMEOUT = "com.caf.fmradio.SWEEP_DWELL_DELAY_EXP";
+
+    private BroadcastReceiver mBandSweepDelayExprdListener = null;
+    private BroadcastReceiver mBandSweepDwellExprdListener = null;
+
+    private WakeLock mWakeLock;
+
+    private GetNextFreqInterface mNextFreqInterface;
+    private CommaSeparatedFreqFileReader mFreqFileReader;
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -300,28 +335,50 @@ public class FMStats extends Activity  {
         if(bandSweepSettingButton != null) {
            bandSweepSettingButton.setOnClickListener(mClicktBandSweepSettingListener);
         }
+
+        PowerManager pm = (PowerManager)getSystemService(Context.POWER_SERVICE);
+        mWakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, this.getClass().getName());
+        mWakeLock.setReferenceCounted(false);
+
+        registerBandSweepDelayExprdListener();
+        registerBandSweepDwellExprdListener();
     }
 
+    @Override
+    public void onStart() {
+       super.onStart();
+       if(isRecording()) {
+          Log.d(LOGTAG, "onStart");
+          initiateRecordThread();
+       }
+    }
+
+    @Override
+    public void onStop() {
+       super.onStop();
+       if(isRecording()) {
+          try {
+               if(null != mRecordUpdateHandlerThread) {
+                  mRecordUpdateHandlerThread.interrupt();
+               }
+          }catch (NullPointerException e) {
+               e.printStackTrace();
+          }
+       }
+    }
+
+    @Override
     public void onDestroy() {
+
+        stopCurTest();
+
+        unRegisterBroadcastReceiver(mBandSweepDelayExprdListener);
+        unRegisterBroadcastReceiver(mBandSweepDwellExprdListener);
+
         if(null != mFileCursor ) {
             try {
                 mFileCursor.close();
             } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-        /*Stop the thread by interrupting it*/
-        if(mMultiUpdateThread != null) {
-           mMultiUpdateThread.interrupt();
-           mMultiUpdateThread = null;
-        }
-        /*Stop the search/scan if there is an ongoing*/
-        if(SEARCH_TEST == mTestSelected)
-        {
-           Log.d(LOGTAG, "Stop Search\n");
-           try {
-                 mService.cancelSearch();
-           } catch (RemoteException e) {
                  e.printStackTrace();
            }
         }
@@ -331,6 +388,7 @@ public class FMStats extends Activity  {
         mReceiver = null;
         mService = null;
         removeDialog(DIALOG_BAND_SWEEP_SETTING);
+        mWakeLock.release();
         super.onDestroy();
     }
 
@@ -345,7 +403,6 @@ public class FMStats extends Activity  {
               runCurrentTest();
            }else {
               mTestRunning = false;
-              /*Set it back to ready to Run*/
               SetButtonState(true);
               /*Stop the thread by interrupting it*/
               if(mMultiUpdateThread != null) {
@@ -361,6 +418,8 @@ public class FMStats extends Activity  {
                  }
               }
               if(mTestSelected == SWEEP_TEST) {
+                 stopBandSweep();
+                 sendStatusDoneMsg();
                  enableBandSweepSetting();
               }
            }
@@ -1675,6 +1734,7 @@ public class FMStats extends Activity  {
        }
        mBand.lFreq = lFreq;
        mBand.hFreq = hFreq;
+       mBand.cur_freq = lFreq;
        if(Spacing == 0) {
           mBand.Spacing = 200; // 200KHz
        }else if(Spacing == 1) {
@@ -1683,52 +1743,26 @@ public class FMStats extends Activity  {
           mBand.Spacing = 50;
        }
 
-       if(mMultiUpdateThread == null) {
-          if(prevSweepMthd == 0) {
-             mMultiUpdateThread = new Thread(null, getManualSweepResults,
-                                           "MultiResultsThread");
-          }else {
-             mMultiUpdateThread = new Thread(null, getFileSweepResults,
-                                           "MultiResultsThread");
-          }
-       }
-       /* Launch he dummy thread to simulate the transfer progress */
-       Log.d(LOGTAG, "Thread State: " + mMultiUpdateThread.getState());
-       if((mMultiUpdateThread.getState() == Thread.State.TERMINATED)) {
-          if(prevSweepMthd == 0) {
-             mMultiUpdateThread = new Thread(null, getManualSweepResults,
-                                                  "MultiResultsThread");
-          }else {
-             mMultiUpdateThread = new Thread(null, getFileSweepResults,
-                                           "MultiResultsThread");
-          }
-       }
-       /* If the thread state is "new" then the thread has not yet started */
-       if(mMultiUpdateThread.getState() == Thread.State.NEW) {
-          mMultiUpdateThread.start();
-       }
+       setAlarm(prevDelayTime * 1000, BAND_SWEEP_START_DELAY_TIMEOUT);
     }
 
     /* Thread processing */
     private Runnable getManualSweepResults = new Runnable() {
        public void run() {
-            try {
-                Thread.sleep(prevDelayTime * 1000);
-            }catch(InterruptedException e) {
-            }
-            for (int i = mBand.lFreq; (i <= mBand.hFreq) &&
-                                     (mService != null); i += mBand.Spacing) {
-                 if(!tuneAndUpdateSweepResult(i)) {
-                    break;
-                 }
-                 try {
-                     Thread.sleep(prevDwellTime * 1000);
-                 }catch (InterruptedException e) {
-                     /*Stop the thrad*/
-                     break;
-                 }
-            }
-            sendStatusDoneMsg();
+           mWakeLock.acquire(10 * 1000);
+           if(mBand.cur_freq <= mBand.hFreq) {
+              if(!tuneAndUpdateSweepResult(mBand.cur_freq)) {
+                 sendStatusDoneMsg();
+              }
+              mBand.cur_freq += mBand.Spacing;
+              if(mBand.cur_freq > mBand.hFreq) {
+                 sendStatusDoneMsg();
+              }else {
+                 setAlarm(prevDwellTime * 1000, BAND_SWEEP_DWELL_DELAY_TIMEOUT);
+              }
+           }else {
+              sendStatusDoneMsg();
+           }
        }
     };
 
@@ -1750,46 +1784,29 @@ public class FMStats extends Activity  {
 
     private Runnable getFileSweepResults = new Runnable() {
        public void run() {
-          boolean status = true;
-          try {
-               BufferedReader reader = new BufferedReader
-                               (new FileReader(getFilesDir()
-                                                + FREQ_LIST_FILE_NAME));
-               String curLine = null;
-               try {
-                    Thread.sleep(prevDelayTime * 1000);
-               }catch(InterruptedException e) {
+         boolean status = true;
+         int freq;
+
+         mWakeLock.acquire(10 * 1000);
+         freq = mNextFreqInterface.getNextFreq();
+
+         for(; (status = (!mNextFreqInterface.errorOccured()) & (!Thread.currentThread().isInterrupted()));
+                  freq = mNextFreqInterface.getNextFreq()) {
+            if(validFreq(freq)) {
+               if(!tuneAndUpdateSweepResult(freq)) {
+                  status = false;
+                  break;
+               }else {
+                  setAlarm(prevDwellTime * 1000, BAND_SWEEP_DWELL_DELAY_TIMEOUT);
+                  break;
                }
-               while((reader != null) && (curLine = reader.readLine()) != null) {
-                     String[] freq_list = curLine.split(",");
-                     for(int i = 0; (freq_list != null ) &&
-                                      (i < freq_list.length); i++) {
-                         int freq =
-                             (int)(Double.parseDouble(freq_list[i]) * 1000);
-                         if(validFreq(freq)) {
-                            if(!tuneAndUpdateSweepResult(freq)) {
-                               status = false;
-                               break;
-                            }else {
-                               try {
-                                   Thread.sleep(prevDwellTime * 1000);
-                               }catch (InterruptedException e) {
-                                   /*Stop the thrad*/
-                                   status = false;
-                                   break;
-                               }
-                            }
-                         }
-                     }
-                     if(!status) {
-                        break;
-                     }
-               }
-               reader.close();
-          }catch(IOException e) {
-               e.printStackTrace();
-          }
-          sendStatusDoneMsg();
+            }
+         }
+         if(!status) {
+            sendStatusDoneMsg();
+            mNextFreqInterface.Stop();
+            mNextFreqInterface = null;
+         }
        }
     };
 
@@ -1917,6 +1934,17 @@ public class FMStats extends Activity  {
                case STATUS_DONE:
                     SetButtonState(true);
                     break;
+               case RECORDTIMER_EXPIRED:
+                    Log.d(LOGTAG, "mUIUpdateHandlerHandler - RECORDTIMER_EXPIRED");
+                    if(!isRecording()) {
+                       Log.d(LOGTAG, "Stop Recording");
+                       stopRecording();
+                    }
+                   break;
+               case RECORDTIMER_UPDATE:
+                   Log.d(LOGTAG, "mUIUpdateHandlerHandler - RECORDTIMER_UPDATE");
+                   updateExpiredRecordTime();
+                   break;
                }
             }
     };
@@ -1995,6 +2023,9 @@ public class FMStats extends Activity  {
                 {
                    e.printStackTrace();
                 }
+                if(isRecording()) {
+                   initiateRecordThread();
+                }
                 return;
              } else
              {
@@ -2012,17 +2043,19 @@ public class FMStats extends Activity  {
           public void onEnabled()
           {
              Log.d(LOGTAG, "mServiceCallbacks.onEnabled :");
+             invalidateOptionsMenu();
           }
 
           public void onDisabled()
           {
              Log.d(LOGTAG, "mServiceCallbacks.onDisabled :");
-             stopCurTest();
+             stopAllOperations();
           }
 
           public void onRadioReset()
           {
              Log.d(LOGTAG, "mServiceCallbacks.onRadioReset :");
+             stopAllOperations();
           }
 
           public void onTuneStatusChanged()
@@ -2087,6 +2120,7 @@ public class FMStats extends Activity  {
           public void onRecordingStopped()
           {
              Log.d(LOGTAG, "mServiceCallbacks.onDisabled :");
+             stopRecording();
           }
           public void onFinishActivity()
           {
@@ -2095,6 +2129,10 @@ public class FMStats extends Activity  {
           public void onRecordingStarted()
           {
              Log.d(LOGTAG, "mServiceCallbacks.onRecordingStarted:");
+             int durationInMins = FmSharedPreferences.getRecordDuration();
+             Log.e(LOGTAG, " Fected duration: " + durationInMins);
+             initiateRecordDurationTimer(durationInMins);
+             invalidateOptionsMenu();
           }
       };
       /* Radio Vars */
@@ -2128,6 +2166,9 @@ public class FMStats extends Activity  {
              case CUR_FREQ_TEST:
                   break;
              case SWEEP_TEST:
+                  stopBandSweep();
+                  sendStatusDoneMsg();
+                  break;
              case CUR_MULTI_TEST:
                   if (mMultiUpdateThread != null)
                       mMultiUpdateThread.interrupt();
@@ -2235,4 +2276,286 @@ public class FMStats extends Activity  {
         }
     }
 
- }
+    private void registerBandSweepDelayExprdListener() {
+        if(mBandSweepDelayExprdListener == null) {
+           mBandSweepDelayExprdListener = new BroadcastReceiver() {
+              @Override
+               public void onReceive(Context context, Intent intent) {
+                   Log.d(LOGTAG, "Received Band sweep delay expired");
+                   mWakeLock.acquire(5 * 1000);
+                   StartBandSweep();
+               }
+           };
+           IntentFilter intentFilter = new IntentFilter(BAND_SWEEP_START_DELAY_TIMEOUT);
+           registerReceiver(mBandSweepDelayExprdListener, intentFilter);
+        }
+    }
+
+    private void registerBandSweepDwellExprdListener() {
+        if(mBandSweepDwellExprdListener == null) {
+           mBandSweepDwellExprdListener = new BroadcastReceiver() {
+              @Override
+               public void onReceive(Context context, Intent intent) {
+                   Log.d(LOGTAG, "received Band sweep Dwell expired");
+                   mWakeLock.acquire(5 * 1000);
+                   ResumeBandSweep();
+               }
+           };
+           IntentFilter intentFilter = new IntentFilter(BAND_SWEEP_DWELL_DELAY_TIMEOUT);
+           registerReceiver(mBandSweepDwellExprdListener, intentFilter);
+        }
+    }
+
+    private void unRegisterBroadcastReceiver(BroadcastReceiver receiver) {
+        if(receiver != null) {
+           unregisterReceiver(receiver);
+           receiver = null;
+        }
+    }
+
+    private void setAlarm(long duration, String action) {
+        Intent i = new Intent(action);
+        AlarmManager am = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0, i, 0);
+        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + duration, pi);
+    }
+
+    private void cancelAlarm(String action) {
+        Intent i = new Intent(action);
+        AlarmManager am = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
+        PendingIntent pi = PendingIntent.getBroadcast(this, 0, i, 0);
+        am.cancel(pi);
+    }
+
+    private void StartBandSweep() {
+       if(mMultiUpdateThread == null ||
+            (mMultiUpdateThread.getState() == Thread.State.TERMINATED)) {
+          if(prevSweepMthd == 0) {
+             mMultiUpdateThread = new Thread(null, getManualSweepResults,
+                                           "MultiResultsThread");
+          }else {
+             mNextFreqInterface = new CommaSeparatedFreqFileReader(getFilesDir() + FREQ_LIST_FILE_NAME);
+             mMultiUpdateThread = new Thread(null, getFileSweepResults,
+                                           "MultiResultsThread");
+          }
+       }
+
+       /* If the thread state is "new" then the thread has not yet started */
+       if(mMultiUpdateThread.getState() == Thread.State.NEW) {
+          mMultiUpdateThread.start();
+       }
+    }
+
+    private void ResumeBandSweep() {
+       if(mMultiUpdateThread == null ||
+            (mMultiUpdateThread.getState() == Thread.State.TERMINATED)) {
+          if(prevSweepMthd == 0) {
+             mMultiUpdateThread = new Thread(null, getManualSweepResults,
+                                           "MultiResultsThread");
+          }else {
+             mMultiUpdateThread = new Thread(null, getFileSweepResults,
+                                           "MultiResultsThread");
+          }
+       }
+
+       /* If the thread state is "new" then the thread has not yet started */
+       if(mMultiUpdateThread.getState() == Thread.State.NEW) {
+          mMultiUpdateThread.start();
+       }
+    }
+
+    private void stopBandSweep() {
+       cancelAlarm(BAND_SWEEP_START_DELAY_TIMEOUT);
+       cancelAlarm(BAND_SWEEP_DWELL_DELAY_TIMEOUT);
+       if(mMultiUpdateThread != null) {
+          mMultiUpdateThread.interrupt();
+       }
+       if(mNextFreqInterface != null) {
+          mNextFreqInterface.Stop();
+          mNextFreqInterface = null;
+       }
+    }
+
+    public boolean isRecording() {
+       if(mService == null)
+          return false;
+       try {
+            return mService.isFmRecordingOn();
+       }catch(RemoteException e) {
+            return false;
+       }
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.menu_rf_stats, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        super.onPrepareOptionsMenu(menu);
+        MenuItem item;
+
+        item = menu.findItem(R.id.menu_recording);
+        if(item != null && !isRecording()) {
+           item.setTitle(R.string.menu_record_start);
+           item.setEnabled(isFmOn());
+        }else if(item != null) {
+           item.setTitle(R.string.menu_record_stop);
+           setRecordDurationDisplay(menu, R.id.menu_record_duration);
+        }
+        return true;
+    }
+
+    private void setRecordDurationDisplay(Menu menu, int id) {
+       MenuItem item;
+       long timeNow;
+       long seconds;
+
+       if(menu == null)
+          return;
+       item = menu.findItem(id);
+       if(item != null) {
+          timeNow = SystemClock.elapsedRealtime();
+          seconds = (timeNow - getRecordingStartTime()) / 1000;
+          item.setTitle(makeTimeString(seconds));
+       }
+    }
+
+    private void startRecording() {
+      if(isFmOn()) {
+         try {
+              mService.startRecording();
+         }catch(RemoteException e) {
+              e.printStackTrace();
+         }
+      }
+    }
+
+    private void stopRecording() {
+       if(null != mRecordUpdateHandlerThread) {
+          mRecordUpdateHandlerThread.interrupt();
+       }
+       if(mService != null) {
+          try {
+               mService.stopRecording();
+           }catch (RemoteException e) {
+               e.printStackTrace();
+           }
+        }
+        invalidateOptionsMenu();
+    }
+
+    private long getRecordingStartTime() {
+       if(mService == null)
+          return 0;
+       try {
+            return mService.getRecordingStartTime();
+       }catch(RemoteException e) {
+            return 0;
+       }
+    }
+
+    private void initiateRecordDurationTimer(long mins ) {
+       Log.d(LOGTAG, "Stop Recording in mins : " + mins);
+       initiateRecordThread();
+    }
+
+    private void initiateRecordThread() {
+      if(mRecordUpdateHandlerThread == null) {
+         mRecordUpdateHandlerThread = new Thread(null, doRecordProcessing,
+                                                "RecordUpdateThread");
+      }
+      /* Launch the dummy thread to simulate the transfer progress */
+      Log.d(LOGTAG, "Thread State: " + mRecordUpdateHandlerThread.getState());
+      if(mRecordUpdateHandlerThread.getState() == Thread.State.TERMINATED) {
+         mRecordUpdateHandlerThread = new Thread(null, doRecordProcessing,
+                                                "RecordUpdateThread");
+      }
+      /* If the thread state is "new" then the thread has not yet started */
+      if(mRecordUpdateHandlerThread.getState() == Thread.State.NEW) {
+         mRecordUpdateHandlerThread.start();
+      }
+   }
+
+   /* Recorder Thread processing */
+   private Runnable doRecordProcessing = new Runnable() {
+      public void run() {
+         while(isRecording() &&
+                 (!Thread.currentThread().isInterrupted())) {
+               try {
+                    Thread.sleep(500);
+                    Message statusUpdate = new Message();
+                    statusUpdate.what = RECORDTIMER_UPDATE;
+                    mUIUpdateHandlerHandler.sendMessage(statusUpdate);
+               }catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+               }
+               if(!isRecording()) {
+                  Message finished = new Message();
+                  finished.what = RECORDTIMER_EXPIRED;
+                  mUIUpdateHandlerHandler.sendMessage(finished);
+               }
+         }
+      }
+   };
+
+   private void updateExpiredRecordTime() {
+      int vis = View.VISIBLE;
+      if(isRecording()) {
+         invalidateOptionsMenu();
+      }
+   }
+
+   private String makeTimeString(long secs) {
+      String durationformat = getString(R.string.durationformat);
+
+      /** Provide multiple arguments so the format can be changed easily by
+       *  modifying the xml.
+       **/
+      sFormatBuilder.setLength(0);
+
+      final Object[] timeArgs = sTimeArgs;
+      timeArgs[0] = secs / 3600;
+      timeArgs[1] = secs / 60;
+      timeArgs[2] = (secs / 60) % 60;
+      timeArgs[3] = secs;
+      timeArgs[4] = secs % 60;
+
+      return sFormatter.format(durationformat, timeArgs).toString();
+   }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        switch(item.getItemId())
+        {
+          case R.id.menu_recording:
+               if(isRecording()) {
+                  stopRecording();
+               }else {
+                  startRecording();
+               }
+               break;
+        }
+        return true;
+    }
+
+    private boolean isFmOn() {
+       boolean status = false;
+
+       if(mService != null) {
+          try {
+               status = mService.isFmOn();
+          }catch(RemoteException e) {
+          }
+       }
+       return status;
+    }
+
+    private void stopAllOperations() {
+       stopCurTest();
+       stopRecording();
+    }
+}
