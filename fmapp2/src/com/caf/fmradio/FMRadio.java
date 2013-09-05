@@ -532,6 +532,7 @@ public class FMRadio extends Activity
       if (station != null) {
           mTunedStation.Copy(station);
       }
+      mStereo = FmSharedPreferences.getLastAudioMode();
       mHandler.post(mUpdateProgramService);
       mHandler.post(mUpdateRadioText);
       mHandler.post(mOnStereo);
@@ -1482,9 +1483,20 @@ public class FMRadio extends Activity
           @Override
           public void onClick(View v) {
              // TODO Auto-generated method stub
-             enableSpeaker();
+             mSpeakerButton.setClickable(false);
+             mSpeakerButton.setOnClickListener(null);
+             mHandler.removeCallbacks(mEnableRadioTask);
+             mHandler.postDelayed(mEnableSpeakerTask, 0);
           }
     };
+
+   private Runnable mEnableSpeakerTask = new Runnable() {
+     public void run() {
+       enableSpeaker();
+       mSpeakerButton.setClickable(true);
+       mSpeakerButton.setOnClickListener(mSpeakerClickListener);
+     }
+   };
 
    private View.OnClickListener mMuteModeClickListener =
       new View.OnClickListener() {
@@ -2582,6 +2594,7 @@ public class FMRadio extends Activity
          }else {
              mStereoTV.setText("");
          }
+         FmSharedPreferences.setLastAudioMode(mStereo);
       }
    };
 
@@ -2943,6 +2956,7 @@ public class FMRadio extends Activity
          }
          cleanupTimeoutHandler();
          mHandler.post(mUpdateStationInfo);
+         mHandler.post(mOnStereo);
       }
 
       public void onProgramServiceChanged() {
