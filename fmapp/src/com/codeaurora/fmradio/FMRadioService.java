@@ -473,7 +473,7 @@ public class FMRadioService extends Service
                                  }
                                  break;
                              case KeyEvent.KEYCODE_MEDIA_PLAY:
-                                 if (mServiceInUse ) {
+                                 if (isAntennaAvailable() && mServiceInUse ) {
                                      fmOn();
                                      if (isOrderedBroadcast()) {
                                          abortBroadcast();
@@ -656,8 +656,6 @@ public class FMRadioService extends Service
       mServiceInUse = true;
       /* Application/UI is attached, so get out of lower power mode */
       setLowPowerMode(false);
-      if((mPlaybackInProgress == false) && isWiredHeadsetAvailable())
-         startFM();
       Log.d(LOGTAG, "onRebind");
    }
 
@@ -1046,13 +1044,7 @@ private Runnable mSpeakerDisableTask = new Runnable() {
                          mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
                       }
                       if (true == mPlaybackInProgress) {
-                          if (mMuted)
-                              unMute();
-                          stopFM();
-                      }
-                      if (mSpeakerPhoneOn) {
-                          if (isAnalogModeSupported())
-                              setAudioPath(false);
+                          fmOff();
                       }
                       mStoppedOnFocusLoss = true;
                       break;
