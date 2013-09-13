@@ -454,6 +454,8 @@ public class FmReceiver extends FmTransceiver
          /* Do Receiver Specific Enable Stuff here.*/
          status = registerClient(mCallback);
          mRdsData = new FmRxRdsData(sFd);
+         setSearchAlgoType(SEARCH_SINR_INT);
+         Log.d(TAG, "Set search algorithm to SINR_INT.");
       }
       else {
          status = false;
