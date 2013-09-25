@@ -62,7 +62,11 @@ public class Settings extends PreferenceActivity implements
         public static final String USER_DEFINED_BAND_MAX_KEY = "user_defined_band_max";
         public static final String CHAN_SPACING_KEY = "chanl_spacing";
         public static final String RESTORE_FACTORY_DEFAULT_ACTION = "com.caf.fmradio.settings.revert_to_defaults";
-
+        public static final String ACTION_FM_SETTING = "com.caf.fmradio.settings.changed";
+        public static final int FM_BAND_CHANGED = 1;
+        public static final int FM_CHAN_SPACING_CHANGED = 2;
+        public static final int FM_AF_OPTION_CHANGED = 3;
+        public static final int FM_AUDIO_MODE_CHANGED = 4;
         private static final String LOGTAG = FMRadio.LOGTAG;
         private static final String USR_BAND_MSG = "Enter Freq from range 76.0 - 108.0";
 
@@ -272,8 +276,7 @@ public class Settings extends PreferenceActivity implements
                                                         + index);
               FmSharedPreferences.setCountry(index);
               setBandSummary(index);
-              bStatus = FMRadio.fmConfigure();
-              FMTransmitterActivity.fmConfigure();
+              sendSettingsChangedIntent(FM_BAND_CHANGED);
               if (curList != null) {
                   curList.clear();
               }
@@ -286,27 +289,31 @@ public class Settings extends PreferenceActivity implements
                if(valStr != null) {
                   index  = mChannelSpacingPref.findIndexOfValue(valStr);
                }
-               if ((index < 0) || (index >= summaryRecordItems.length)) {
+               if ((index < 0) || (index >= chSpacingItems.length)) {
                    index = 0;
                    mChannelSpacingPref.setValueIndex(0);
                }
                mChannelSpacingPref.setSummary(chSpacingItems[index]);
                FmSharedPreferences.setChSpacing(2 - index);
-               FMRadio.fmConfigure();
-               FMTransmitterActivity.fmConfigure();
+               sendSettingsChangedIntent(FM_CHAN_SPACING_CHANGED);
                if(curList != null) {
                   curList.clear();
                }
                clearStationList();
            }else if(key.equals(USER_DEFINED_BAND_MIN_KEY)) {
                String valStr = mUserBandMinPref.getText();
-               double freq = Double.parseDouble(valStr) * 1000;
+               double freq = 0;
+               try {
+                    freq = Double.parseDouble(valStr) * 1000;
+               }catch(NumberFormatException e) {
+                    e.printStackTrace();
+                    return;
+               }
                max_freq = FmSharedPreferences.getUpperLimit();
                min_freq = FmSharedPreferences.getLowerLimit();
                if((freq > 0) && (freq < max_freq) && (freq >= 76000)) {
                   FmSharedPreferences.setLowerLimit((int)freq);
-                  FMRadio.fmConfigure();
-                  FMTransmitterActivity.fmConfigure();
+                  sendSettingsChangedIntent(FM_BAND_CHANGED);
                   setBandSummary(summaryBandItems.length - 1);
                   clearStationList();
                }else {
@@ -314,13 +321,18 @@ public class Settings extends PreferenceActivity implements
                }
            }else if(key.equals(USER_DEFINED_BAND_MAX_KEY)) {
                String valStr = mUserBandMaxPref.getText();
-               double freq = Double.parseDouble(valStr) * 1000;
+               double freq = 0;
+               try {
+                    freq = Double.parseDouble(valStr) * 1000;
+               }catch(NumberFormatException e) {
+                    e.printStackTrace();
+                    return;
+               }
                min_freq = FmSharedPreferences.getLowerLimit();
                max_freq = FmSharedPreferences.getUpperLimit();
                if((freq > 0) && (freq > min_freq) && (freq <= 108000)) {
                   FmSharedPreferences.setUpperLimit((int)freq);
-                  FMRadio.fmConfigure();
-                  FMTransmitterActivity.fmConfigure();
+                  sendSettingsChangedIntent(FM_BAND_CHANGED);
                   setBandSummary(summaryBandItems.length - 1);
                   clearStationList();
                }else {
@@ -333,8 +345,8 @@ public class Settings extends PreferenceActivity implements
                      Log.d(LOGTAG, "onSharedPreferenceChanged: Auto AF Enable: "
                                                + bAFAutoSwitch);
                      FmSharedPreferences.setAutoAFSwitch(bAFAutoSwitch);
-                     FMRadio.fmAutoAFSwitch();
                      mPrefs.Save();
+                     sendSettingsChangedIntent(FM_AF_OPTION_CHANGED);
                  }else if(key.equals(RECORD_DURATION_KEY)) {
                      if(FMRadio.RECORDING_ENABLE) {
                         String valueStr = mRecordDurPreference.getValue();
@@ -374,7 +386,8 @@ public class Settings extends PreferenceActivity implements
                          // Mono
                          FmSharedPreferences.setAudioOutputMode(false);
                      }
-                     FMRadio.fmAudioOutputMode();
+                     mPrefs.Save();
+                     sendSettingsChangedIntent(FM_AUDIO_MODE_CHANGED);
                  }
               }
           }
@@ -512,5 +525,12 @@ public class Settings extends PreferenceActivity implements
         }
         private void displayToast(String msg) {
            Toast.makeText(getApplicationContext(), msg, Toast.LENGTH_LONG).show();
+        }
+
+        private void sendSettingsChangedIntent(int action) {
+           Intent intent = new Intent(ACTION_FM_SETTING);
+           intent.putExtra("state", action);
+           Log.d(LOGTAG, "Sending  FM SETTING Change intent for = " + action);
+           getApplicationContext().sendBroadcast(intent);
         }
 }
