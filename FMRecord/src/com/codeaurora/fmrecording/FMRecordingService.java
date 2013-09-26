@@ -57,10 +57,18 @@ import android.os.UserHandle;
 import android.net.Uri;
 import android.content.res.Resources;
 import android.os.StatFs;
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.widget.RemoteViews;
+import android.R.layout;
+import android.R.drawable;
+import android.content.ComponentName;
+import android.content.res.Resources;
 
 public class FMRecordingService extends Service {
     private static final String TAG     = "FMRecordingService";
     private BroadcastReceiver mFmRecordingReceiver = null;
+    private BroadcastReceiver mFmShutdownReceiver = null;
     public static final long UNAVAILABLE = -1L;
     public static final long PREPARING = -2L;
     public static final long UNKNOWN_SIZE = -3L;
@@ -83,6 +91,7 @@ public class FMRecordingService extends Service {
         super.onCreate();
         Log.d(TAG, "FMRecording Service onCreate");
         registerRecordingListner();
+        registerShutdownListner();
     }
 
     public int onStartCommand(Intent intent, int flags, int startId) {
@@ -98,6 +107,7 @@ public class FMRecordingService extends Service {
             stopRecord();
         }
         unregisterBroadCastReceiver(mFmRecordingReceiver);
+        unregisterBroadCastReceiver(mFmShutdownReceiver);
         super.onDestroy();
     }
 
@@ -106,13 +116,33 @@ public class FMRecordingService extends Service {
         return null;
     }
 
-   private void unregisterBroadCastReceiver(BroadcastReceiver myreceiver) {
+    private void unregisterBroadCastReceiver(BroadcastReceiver myreceiver) {
 
        if (myreceiver != null) {
            unregisterReceiver(myreceiver);
            myreceiver = null;
        }
-   }
+    }
+
+    private void registerShutdownListner() {
+        if (mFmShutdownReceiver == null) {
+            mFmShutdownReceiver = new BroadcastReceiver() {
+                 @Override
+                 public void onReceive(Context context, Intent intent) {
+                     Log.d(TAG, "Received intent " +intent);
+                     String action = intent.getAction();
+                     Log.d(TAG, " action = " +action);
+                     if (action.equals("android.intent.action.ACTION_SHUTDOWN")) {
+                         Log.d(TAG, "android.intent.action.ACTION_SHUTDOWN Intent received");
+                         stopRecord();
+                     }
+                 }
+            };
+            IntentFilter iFilter = new IntentFilter();
+            iFilter.addAction("android.intent.action.ACTION_SHUTDOWN");
+            registerReceiver(mFmShutdownReceiver, iFilter);
+        }
+    }
 
     private static long getAvailableSpace() {
         String state = Environment.getExternalStorageState();
@@ -259,7 +289,17 @@ public class FMRecordingService extends Service {
         });
         mSampleStart = System.currentTimeMillis();
         sendRecordingStatusIntent(START);
+        startNotification();
         return true;
+    }
+
+    private void startNotification() {
+        RemoteViews views = new RemoteViews(getPackageName(), R.layout.record_status_bar);
+        Notification status = new Notification();
+        status.contentView = views;
+        status.flags |= Notification.FLAG_ONGOING_EVENT;
+        status.icon = R.drawable.ic_menu_record;
+        startForeground(102, status);
     }
 
     private void stopRecord() {
@@ -278,6 +318,7 @@ public class FMRecordingService extends Service {
 
         sendRecordingStatusIntent(STOP);
         saveFile();
+        stopForeground(true);
     }
 
     private void saveFile() {

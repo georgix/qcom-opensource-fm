@@ -470,7 +470,7 @@ public class FMRadioService extends Service
                                  }
                                  break;
                              case KeyEvent.KEYCODE_MEDIA_PLAY:
-                                 if (mServiceInUse ) {
+                                 if (isAntennaAvailable() && mServiceInUse) {
                                      fmOn();
                                      if (isOrderedBroadcast()) {
                                          abortBroadcast();
@@ -653,8 +653,6 @@ public class FMRadioService extends Service
       mServiceInUse = true;
       /* Application/UI is attached, so get out of lower power mode */
       setLowPowerMode(false);
-      if((mPlaybackInProgress == false) && isWiredHeadsetAvailable())
-         startFM();
       Log.d(LOGTAG, "onRebind");
    }
 
@@ -740,14 +738,15 @@ public class FMRadioService extends Service
            //reason for resending the Speaker option is we are sending
            //ACTION_FM=1 to AudioManager, the previous state of Speaker we set
            //need not be retained by the Audio Manager.
+           AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM,
+                               AudioSystem.DEVICE_STATE_AVAILABLE, "");
            if (isSpeakerEnabled()) {
                mSpeakerPhoneOn = true;
                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_SPEAKER);
            } else {
                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
            }
-           AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM,
-                               AudioSystem.DEVICE_STATE_AVAILABLE, "");
+
            sendRecordServiceIntent(RECORD_START);
        }
        mPlaybackInProgress = true;
@@ -762,7 +761,6 @@ public class FMRadioService extends Service
            Log.d(LOGTAG, "FMRadio: Requesting to stop FM");
            AudioSystem.setDeviceConnectionState(AudioSystem.DEVICE_OUT_FM,
                                      AudioSystem.DEVICE_STATE_UNAVAILABLE, "");
-           sendRecordServiceIntent(RECORD_STOP);
        }
        mPlaybackInProgress = false;
    }
@@ -1044,13 +1042,7 @@ public class FMRadioService extends Service
                          mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
                       }
                       if (true == mPlaybackInProgress) {
-                          if(mMuted)
-                             unMute();
-                          stopFM();
-                      }
-                      if (mSpeakerPhoneOn) {
-                          if (isAnalogModeSupported())
-                              setAudioPath(false);
+                          fmOff();
                       }
                       mStoppedOnFocusLoss = true;
                       break;
@@ -1637,6 +1629,7 @@ public class FMRadioService extends Service
          Log.d(LOGTAG, "audioManager.setFmRadioOn false done \n" );
       }
 
+      sendRecordServiceIntent(RECORD_STOP);
       if (isAnalogModeEnabled()) {
               SystemProperties.set("hw.fm.isAnalog","false");
               misAnalogPathEnabled = false;
@@ -2500,7 +2493,7 @@ public class FMRadioService extends Service
             }
             /* Update the frequency in the StatusBar's Notification */
             startNotification();
-
+            enableStereo(FmSharedPreferences.getAudioOutputMode());
          }
          catch (RemoteException e)
          {
