@@ -61,14 +61,14 @@
                android:text="@string/band_sweep_setting"
                android:layout_width="wrap_content"
                android:layout_height="wrap_content"
-               android:layout_toRightOf="@id/Runbutton"
+               android:layout_toEndOf="@id/Runbutton"
                android:textSize="25sp"
                android:visibility="gone"/>
 
            <ProgressBar android:id="@+id/progressbar"
                android:layout_width="100dp"
                android:layout_height="100dp"
-               android:layout_toRightOf="@id/Runbutton"
+               android:layout_toEndOf="@id/Runbutton"
                android:visibility="gone"/>
 
            <TextView
@@ -85,7 +85,7 @@
                android:layout_height="50dp"
                android:text="@string/type_rd"
                android:textSize="15sp"
-               android:layout_alignParentRight="true"
+               android:layout_alignParentEnd="true"
                android:visibility="gone"/>
 
            <Button

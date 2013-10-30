@@ -37,10 +37,10 @@
     <TextView android:id="@+id/prompt"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="8dp"
+        android:layout_marginStart="8dp"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        android:drawableLeft="@android:drawable/ic_dialog_alert"
+        android:drawableStart="@android:drawable/ic_dialog_alert"
         android:drawablePadding="8dp">
     </TextView>
 
@@ -54,13 +54,13 @@
             android:layout_height="wrap_content"
             android:text="@string/button_delete"
             android:layout_gravity="center_horizontal"
-            android:layout_alignParentLeft="true" />
+            android:layout_alignParentStart="true" />
 
         <Button android:id="@+id/cancel"
             android:layout_width="120dp"
             android:layout_height="wrap_content"
             android:text="@string/button_cancel"
-            android:layout_alignParentRight="true" />
+            android:layout_alignParentEnd="true" />
 
     </RelativeLayout>
 
