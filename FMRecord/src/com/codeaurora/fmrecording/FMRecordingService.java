@@ -236,7 +236,9 @@ public class FMRecordingService extends Service {
 
         try {
             if(!"".equals(getResources().getString(R.string.def_save_name_prefix))){
-                mSampleFile = createTempFile("FMRecording", ".3gpp", sampleDir);
+                String suffix = getResources().getString(R.string.def_save_name_suffix);
+                suffix = "".equals(suffix) ? ".3gpp" : suffix;
+                mSampleFile = createTempFile("FMRecording", suffix, sampleDir);
             }else {
                 mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
             }
