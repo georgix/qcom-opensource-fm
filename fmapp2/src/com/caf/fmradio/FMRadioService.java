@@ -80,6 +80,9 @@ import android.media.AudioManager;
 import android.content.ComponentName;
 import android.os.StatFs;
 import android.os.SystemClock;
+import android.os.Process;
+import android.app.ActivityManager;
+import android.app.ActivityManager.RunningAppProcessInfo;
 
 /**
  * Provides "background" FM Radio (that uses the hardware) capabilities,
@@ -100,6 +103,7 @@ public class FMRadioService extends Service
    private BroadcastReceiver mSdcardUnmountReceiver = null;
    private BroadcastReceiver mMusicCommandListener = null;
    private BroadcastReceiver mSleepExpiredListener = null;
+   private boolean mSleepActive = false;
    private BroadcastReceiver mRecordTimeoutListener = null;
    private BroadcastReceiver mDelayedServiceStopListener = null;
    private boolean mOverA2DP = false;
@@ -649,7 +653,7 @@ public class FMRadioService extends Service
    @Override
    public void onRebind(Intent intent) {
       mDelayedStopHandler.removeCallbacksAndMessages(null);
-      cancelAlarms();
+      cancelAlarmDealyedServiceStop();
       mServiceInUse = true;
       /* Application/UI is attached, so get out of lower power mode */
       setLowPowerMode(false);
@@ -663,7 +667,7 @@ public class FMRadioService extends Service
       // make sure the service will shut down on its own if it was
       // just started but not bound to and nothing is playing
       mDelayedStopHandler.removeCallbacksAndMessages(null);
-      cancelAlarms();
+      cancelAlarmDealyedServiceStop();
       setAlarmDelayedServiceStop();
    }
 
@@ -685,6 +689,24 @@ public class FMRadioService extends Service
       return true;
    }
 
+   private String getProcessName() {
+      int id = Process.myPid();
+      String myProcessName = this.getPackageName();
+
+      ActivityManager actvityManager =
+              (ActivityManager)this.getSystemService(this.ACTIVITY_SERVICE);
+      List<RunningAppProcessInfo> procInfos =
+              actvityManager.getRunningAppProcesses();
+
+      for(RunningAppProcessInfo procInfo : procInfos) {
+         if (id == procInfo.pid) {
+              myProcessName = procInfo.processName;
+         }
+      }
+      procInfos.clear();
+      return myProcessName;
+   }
+
    private void sendRecordIntent(int action) {
        Intent intent = new Intent(ACTION_FM_RECORDING);
        intent.putExtra("state", action);
@@ -695,6 +717,8 @@ public class FMRadioService extends Service
              mRecordDuration = (FmSharedPreferences.getRecordDuration() * 60 * 1000);
           }
           intent.putExtra("record_duration", mRecordDuration);
+          intent.putExtra("process_name", getProcessName());
+          intent.putExtra("process_id", Process.myPid());
         }
        Log.d(LOGTAG, "Sending Recording intent for = " +action);
        getApplicationContext().sendBroadcast(intent);
@@ -1474,6 +1498,10 @@ public class FMRadioService extends Service
       public long getRecordingStartTime()
       {
            return (mService.get().getRecordingStartTime());
+      }
+      public boolean isSleepTimerActive()
+      {
+           return (mService.get().isSleepTimerActive());
       }
    }
    private final IBinder mBinder = new ServiceStub(this);
@@ -2892,12 +2920,14 @@ public class FMRadioService extends Service
        PendingIntent pi = PendingIntent.getBroadcast(this, 0, i, 0);
        Log.d(LOGTAG, "delayedStop called" + SystemClock.elapsedRealtime() + duration);
        am.set(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + duration, pi);
+       mSleepActive = true;
    }
    private void cancelAlarmSleepExpired() {
        Intent i = new Intent(SLEEP_EXPIRED_ACTION);
        AlarmManager am = (AlarmManager)getSystemService(Context.ALARM_SERVICE);
        PendingIntent pi = PendingIntent.getBroadcast(this, 0, i, 0);
        am.cancel(pi);
+       mSleepActive = false;
    }
    private void setAlarmRecordTimeout(long duration) {
        Intent i = new Intent(RECORD_EXPIRED_ACTION);
@@ -2938,6 +2968,10 @@ public class FMRadioService extends Service
 
    public long getRecordingStartTime() {
       return mSampleStart;
+   }
+
+   public boolean isSleepTimerActive() {
+      return mSleepActive;
    }
    //handling the sleep and record stop when FM App not in focus
    private void delayedStop(long duration, int nType) {
