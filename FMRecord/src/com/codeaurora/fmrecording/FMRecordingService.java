@@ -228,7 +228,11 @@ public class FMRecordingService extends Service {
 
         }
         mSampleFile = null;
-        File sampleDir = Environment.getExternalStorageDirectory();
+        String fmRecordSavePath =  getApplicationContext().getResources().getString(R.string.def_fmRecord_savePath);
+        File sampleDir = new File(Environment.getExternalStorageDirectory().toString() + fmRecordSavePath);
+        if(!sampleDir.exists()) {
+            sampleDir.mkdirs();
+        }
 
         try {
             if(!"".equals(getResources().getString(R.string.def_save_name_prefix))){
