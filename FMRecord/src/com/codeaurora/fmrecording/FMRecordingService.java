@@ -231,7 +231,11 @@ public class FMRecordingService extends Service {
         File sampleDir = Environment.getExternalStorageDirectory();
 
         try {
-             mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
+            if(!"".equals(getResources().getString(R.string.def_save_name_prefix))){
+                mSampleFile = createTempFile("FMRecording", ".3gpp", sampleDir);
+            }else {
+                mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
+            }
         } catch (IOException e) {
              Log.e(TAG, "Not able to access SD Card");
              Toast.makeText(this, "Not able to access SD Card", Toast.LENGTH_SHORT).show();
@@ -550,6 +554,33 @@ public class FMRecordingService extends Service {
        if(mStatusCheckThread != null) {
           mStatusCheckThread.interrupt();
        }
+   }
+
+   public File createTempFile(String prefix, String suffix, File directory)
+            throws IOException {
+        prefix = getResources().getString(R.string.def_save_name_prefix) + '-';
+        // Force a prefix null check first
+        if (prefix.length() < 3) {
+            throw new IllegalArgumentException("prefix must be at least 3 characters");
+        }
+        if (suffix == null) {
+            suffix = ".tmp";
+        }
+        File tmpDirFile = directory;
+        if (tmpDirFile == null) {
+            String tmpDir = System.getProperty("java.io.tmpdir", ".");
+            tmpDirFile = new File(tmpDir);
+        }
+
+        String nameFormat = getResources().getString(R.string.def_save_name_format);
+        SimpleDateFormat df = new SimpleDateFormat(nameFormat);
+        String currentTime = df.format(System.currentTimeMillis());
+
+        File result;
+        do {
+            result = new File(tmpDirFile, prefix + currentTime + suffix);
+        } while (!result.createNewFile());
+        return result;
    }
 
 }
