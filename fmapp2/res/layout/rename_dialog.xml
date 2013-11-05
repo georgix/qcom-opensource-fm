@@ -54,13 +54,13 @@
              android:layout_width="120dp"
              android:layout_height="wrap_content"
              android:text="@string/button_ok"
-             android:layout_alignParentLeft="true" />
+             android:layout_alignParentStart="true" />
 
          <Button android:id="@+id/cancel"
              android:layout_width="120dp"
              android:layout_height="wrap_content"
              android:text="@string/button_cancel"
-             android:layout_alignParentRight="true" />
+             android:layout_alignParentEnd="true" />
 
     </RelativeLayout>
 

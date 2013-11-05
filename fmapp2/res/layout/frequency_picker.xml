@@ -28,8 +28,8 @@
         android:id="@+id/mhz"
         android:layout_width="80dp"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="1dp"
-        android:layout_marginRight="1dp"
+        android:layout_marginStart="1dp"
+        android:layout_marginEnd="1dp"
         android:focusable="true"
         android:focusableInTouchMode="true" />
 
@@ -38,8 +38,8 @@
         android:id="@+id/khz"
         android:layout_width="80dp"
         android:layout_height="wrap_content"
-        android:layout_marginLeft="1dp"
-        android:layout_marginRight="1dp"
+        android:layout_marginStart="1dp"
+        android:layout_marginEnd="1dp"
         android:focusable="true"
         android:focusableInTouchMode="true"
         />
