@@ -421,7 +421,9 @@ public class FMRadioService extends Service
                          int keycode = event.getKeyCode();
                          switch (keycode) {
                              case KeyEvent.KEYCODE_HEADSETHOOK :
-                                 if (isFmOn()){
+                                 if (isFmOn() && SystemProperties.getBoolean("persist.env.fm.seek",false)) {
+                                     seek(true);
+                                 }else if (isFmOn()){
                                      //FM should be off when Headset hook pressed.
                                      fmOff();
                                      if (isOrderedBroadcast()) {

@@ -40,6 +40,7 @@ import android.content.SharedPreferences;
 import qcom.fmradio.FmReceiver;
 import qcom.fmradio.FmConfig;
 import android.util.Log;
+import android.os.SystemProperties;
 
 public class FmSharedPreferences
 {
@@ -500,6 +501,8 @@ public class FmSharedPreferences
       /* Load Configuration */
       if (Locale.getDefault().equals(Locale.CHINA)) {
           setCountry(sp.getInt(FMCONFIG_COUNTRY, REGIONAL_BAND_CHINA));
+      } else if ("INDIA".equals(SystemProperties.get("persist.env.fm.default.country", ""))) {
+          setCountry(sp.getInt(FMCONFIG_COUNTRY, REGIONAL_BAND_INDIA));
       } else {
           setCountry(sp.getInt(FMCONFIG_COUNTRY, REGIONAL_BAND_NORTH_AMERICA));
       }
