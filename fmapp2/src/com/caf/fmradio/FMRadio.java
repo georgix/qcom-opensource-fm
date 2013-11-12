@@ -3034,7 +3034,9 @@ public class FMRadio extends Activity
       public void onAudioUpdate(boolean bStereo) {
          if((bStereo) && (FmSharedPreferences.getAudioOutputMode())) {
             mStereo = FMRADIO_UI_STATION_AUDIO_STEREO;
-         }else {
+         } else if (SystemProperties.getBoolean("persist.env.radio.stereo",false)) {
+            mStereo = FMRADIO_UI_STATION_AUDIO_STEREO;
+         } else {
             mStereo = FMRADIO_UI_STATION_AUDIO_MONO;
          }
          Log.d(LOGTAG, "mServiceCallbacks.onAudioUpdate :" + mStereo);
