@@ -237,7 +237,7 @@ public class FMRadio extends Activity
    private static boolean mIsSeeking = false;
    private static boolean mIsSearching = false;
    private static int mScanPty = 0;
-
+   private static int mScanPtyIndex = 0;
    private Animation mAnimation = null;
    private ScrollerText mRadioTextScroller = null;
    private ScrollerText mERadioTextScroller = null;
@@ -410,7 +410,11 @@ public class FMRadio extends Activity
            displayValues[i] = String.valueOf((min + i * step) / 1000.0f);
        }
        mPicker.setDisplayedValues(displayValues, true);
-       mPicker.setWrapSelectorWheel(true);
+       try {
+           mPicker.setWrapSelectorWheel(true);
+       } catch (IllegalStateException e) {
+           e.printStackTrace();
+       }
        mPicker.invalidate();
    }
    protected int valueToFrequency(int value) {
@@ -1045,6 +1049,7 @@ public class FMRadio extends Activity
                                 Toast.LENGTH_SHORT);
                     int pty = Integer.parseInt(values[item]);
                     clearStationList();
+                    mScanPtyIndex = item;
                     initiateSearch(pty);
                  }
              }
@@ -1167,6 +1172,7 @@ public class FMRadio extends Activity
    private Dialog createProgressDialog(int id) {
       String msgStr = "";
       String titleStr = "";
+      String []items;
       double frequency = mTunedStation.getFrequency() / 1000.0;
       boolean bSearchActive = false;
 
@@ -1174,10 +1180,20 @@ public class FMRadio extends Activity
           msgStr = getString(R.string.msg_seeking);
           bSearchActive = true;
       }else if (isScanActive()) {
-          String ptyStr = PresetStation.parsePTY(mScanPty);
+          if(FmSharedPreferences.isRBDSStd()) {
+                items = getResources().
+                         getStringArray(R.array.search_category_rbds_entries);
+          }else { // if(FmSharedPreferences.isRDSStd())
+                items = getResources().
+                         getStringArray(R.array.search_category_rds_entries);
+          }
+          String ptyStr = "";
+          if (items.length > mScanPtyIndex)
+              ptyStr = items[mScanPtyIndex];
           if (!TextUtils.isEmpty(ptyStr)) {
              msgStr = getString(R.string.msg_scanning_pty, ptyStr);
           }else {
+             Log.d(LOGTAG, "pty is null\n");
              msgStr = getString(R.string.msg_scanning);
           }
           titleStr = getString(R.string.msg_search_title, ("" + frequency));
@@ -2602,6 +2618,7 @@ public class FMRadio extends Activity
       public void run() {
          Log.d(LOGTAG, "mSearchComplete: ");
          mScanPty=0;
+         mScanPtyIndex = 0;
          mIsScaning = false;
          mIsSeeking = false;
          mIsSearching = false;
@@ -3019,6 +3036,7 @@ public class FMRadio extends Activity
       public void onSearchComplete() {
          Log.d(LOGTAG, "mServiceCallbacks.onSearchComplete :");
          mScanPty = 0;
+         mScanPtyIndex = 0;
          mIsScaning = false;
          mIsSeeking = false;
          mIsSearching = false;
