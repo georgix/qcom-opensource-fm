@@ -640,7 +640,8 @@ public class FMRadio extends Activity
                              setIcon(android.R.drawable.ic_menu_info_details);
       }
       menu.add(0, MENU_STATION_LIST, 0, R.string.menu_all_channels);
-      item = menu.add(0, MENU_TAGS, 0, R.string.menu_display_tags);
+      //This feature is unrealized temporarily because BSP has some problems.
+      //item = menu.add(0, MENU_TAGS, 0, R.string.menu_display_tags);
       return true;
    }
 
