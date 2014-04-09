@@ -1061,6 +1061,8 @@ public class FMRadioService extends Service
                   return;
               }
               switch (msg.arg1) {
+                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
+                      Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK");
                   case AudioManager.AUDIOFOCUS_LOSS:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS");
                       //intentional fall through.
@@ -1089,7 +1091,6 @@ public class FMRadioService extends Service
                           startFM();
                       mStoppedOnFocusLoss = false;
                       break;
-                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                   default:
                       Log.e(LOGTAG, "Unknown audio focus change code"+msg.arg1);
               }
