@@ -261,5 +261,6 @@
     <string name="band_sweep_setting_set">Set</string>
     <string name="band_sweep_setting_cancel">Cancel</string>
     <string name="band_sweep_choose">Choose Band Sweep Method</string>
+    <string name="user_defind_band_msg">Enter Freq from range 76.0 - 108.0</string>
 
 </resources>
