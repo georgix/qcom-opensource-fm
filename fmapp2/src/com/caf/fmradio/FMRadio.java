@@ -2046,6 +2046,9 @@ public class FMRadio extends Activity
             String display = "";
             if (station != null) {
                display = station.getName();
+                if (display.length() > 6)
+                    display = display.substring(0,6)+"...";
+               mPresetButtons[buttonIndex].setEllipsize(TextUtils.TruncateAt.END);
                mPresetButtons[buttonIndex].setText(display);
                mPresetButtons[buttonIndex].setTag(station);
                addedStations++;
