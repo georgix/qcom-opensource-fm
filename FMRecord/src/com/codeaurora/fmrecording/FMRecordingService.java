@@ -259,7 +259,10 @@ public class FMRecordingService extends Service {
 
         }
         mSampleFile = null;
-        File sampleDir = Environment.getExternalStorageDirectory();
+        File sampleDir = new File(Environment.getExternalStorageDirectory().getAbsolutePath() +"/FMRecording");
+
+        if(!(sampleDir.mkdirs() || sampleDir.isDirectory()))
+            return false;
 
         try {
              mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
@@ -309,9 +312,12 @@ public class FMRecordingService extends Service {
                          Log.d(TAG, "Maximum file size/duration reached, stopping the recording");
                          stopRecord();
                      }
-                     // Show the toast.
-                     Toast.makeText(FMRecordingService.this, R.string.FMRecording_reach_size_limit,
-                               Toast.LENGTH_LONG).show();
+                     if (what == MediaRecorder.MEDIA_RECORDER_INFO_MAX_FILESIZE_REACHED) {
+                         // Show the toast.
+                         Toast.makeText(FMRecordingService.this,
+                                        R.string.FMRecording_reach_size_limit,
+                                        Toast.LENGTH_LONG).show();
+                     }
                  }
              }
              // from MediaRecorder.OnErrorListener
@@ -417,7 +423,7 @@ public class FMRecordingService extends Service {
         Log.d(TAG, "ContentURI: " + base);
         Uri result = resolver.insert(base, cv);
         if (result == null) {
-            Toast.makeText(this, "Unable to save recorded audio", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.unable_to_store, Toast.LENGTH_SHORT).show();
             return null;
         }
         if (getPlaylistId(res) == -1) {
@@ -469,7 +475,7 @@ public class FMRecordingService extends Service {
         cv.put(MediaStore.Audio.Playlists.NAME, res.getString(R.string.audio_db_playlist_name));
         Uri uri = resolver.insert(MediaStore.Audio.Playlists.getContentUri("external"), cv);
         if (uri == null) {
-            Toast.makeText(this, "Unable to save recorded audio", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, R.string.unable_to_store, Toast.LENGTH_SHORT).show();
         }
         return uri;
     }
