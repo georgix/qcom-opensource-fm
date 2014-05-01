@@ -805,10 +805,12 @@ public class FMRadioService extends Service
        mAudioManager.registerMediaButtonEventReceiver(fmRadio);
        mStoppedOnFocusLoss = false;
 
-       if (!mA2dpDeviceSupportInHal &&  (true == mA2dpDeviceState.isDeviceAvailable()) &&
+       if (!isSpeakerEnabled() && !mA2dpDeviceSupportInHal &&  (true == mA2dpDeviceState.isDeviceAvailable()) &&
            !isAnalogModeEnabled()
             && (true == startA2dpPlayback())) {
             mOverA2DP=true;
+            Log.d(LOGTAG, "Audio source set it as A2DP");
+            AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_BT_A2DP);
        } else {
            Log.d(LOGTAG, "FMRadio: Requesting to start FM");
            //reason for resending the Speaker option is we are sending
@@ -818,8 +820,10 @@ public class FMRadioService extends Service
                                AudioSystem.DEVICE_STATE_AVAILABLE, "");
            if (isSpeakerEnabled()) {
                mSpeakerPhoneOn = true;
+               Log.d(LOGTAG, "Audio source set it as speaker");
                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_SPEAKER);
            } else {
+               Log.d(LOGTAG, "Audio source set it as headset");
                AudioSystem.setForceUse(AudioSystem.FOR_MEDIA, AudioSystem.FORCE_NONE);
            }
 
@@ -1180,11 +1184,26 @@ public class FMRadioService extends Service
               switch (msg.arg1) {
                   case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK");
+                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
+                      Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT");
+                      if (mSpeakerPhoneOn) {
+                         mSpeakerDisableHandler.removeCallbacks(mSpeakerDisableTask);
+                         mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
+                      }
+                      if (true == mPlaybackInProgress) {
+                          if(mMuted)
+                             unMute();
+                          stopFM();
+                      }
+                      if (mSpeakerPhoneOn) {
+                          if (isAnalogModeSupported())
+                              setAudioPath(false);
+                      }
+                      mStoppedOnFocusLoss = true;
+                      break;
                   case AudioManager.AUDIOFOCUS_LOSS:
                       Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS");
                       //intentional fall through.
-                  case AudioManager.AUDIOFOCUS_LOSS_TRANSIENT:
-                      Log.v(LOGTAG, "AudioFocus: received AUDIOFOCUS_LOSS_TRANSIENT");
                       if (true == isFmRecordingOn())
                           stopRecording();
                       if (mSpeakerPhoneOn) {
