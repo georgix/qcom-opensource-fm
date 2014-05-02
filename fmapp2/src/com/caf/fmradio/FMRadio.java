@@ -640,7 +640,8 @@ public class FMRadio extends Activity
                              setIcon(android.R.drawable.ic_menu_info_details);
       }
       menu.add(0, MENU_STATION_LIST, 0, R.string.menu_all_channels);
-      item = menu.add(0, MENU_TAGS, 0, R.string.menu_display_tags);
+      //This feature is unrealized temporarily because BSP has some problems.
+      //item = menu.add(0, MENU_TAGS, 0, R.string.menu_display_tags);
       return true;
    }
 
@@ -962,6 +963,7 @@ public class FMRadio extends Activity
                       RestoreDefaults();
                       enableRadioOnOffUI();
                       tuneRadio(FmSharedPreferences.DEFAULT_NO_FREQUENCY);
+                      FmSharedPreferences.addStation("", FmSharedPreferences.DEFAULT_NO_FREQUENCY, 0);
                   }
                }
             }
@@ -1385,6 +1387,7 @@ public class FMRadio extends Activity
                                                            int whichButton) {
                                           removeDialog(DIALOG_CMD_TIMEOUT);
                                           mCommandFailed = CMD_NONE;
+                                          finish();
                                        }
                                     });
 
@@ -2046,8 +2049,14 @@ public class FMRadio extends Activity
             String display = "";
             if (station != null) {
                display = station.getName();
+                Log.e(LOGTAG, "Venkat:before" + display );
+                if (display.length() > 6)
+		 display = display.substring(0,6)+"...";
+	       Log.e(LOGTAG, "Venkat: after" + display );
+		mPresetButtons[buttonIndex].setEllipsize(TextUtils.TruncateAt.END);
                mPresetButtons[buttonIndex].setText(display);
                mPresetButtons[buttonIndex].setTag(station);
+               mPresetButtons[buttonIndex].setHeight(-1);
                addedStations++;
             }else {
                mPresetButtons[buttonIndex].setText(R.string.add_station);
