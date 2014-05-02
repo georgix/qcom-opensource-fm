@@ -1387,6 +1387,7 @@ public class FMRadio extends Activity
                                                            int whichButton) {
                                           removeDialog(DIALOG_CMD_TIMEOUT);
                                           mCommandFailed = CMD_NONE;
+                                          finish();
                                        }
                                     });
 
