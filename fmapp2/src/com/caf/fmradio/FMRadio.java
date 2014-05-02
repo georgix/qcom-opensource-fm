@@ -962,6 +962,7 @@ public class FMRadio extends Activity
                       RestoreDefaults();
                       enableRadioOnOffUI();
                       tuneRadio(FmSharedPreferences.DEFAULT_NO_FREQUENCY);
+                      FmSharedPreferences.addStation("", FmSharedPreferences.DEFAULT_NO_FREQUENCY, 0);
                   }
                }
             }
@@ -1385,6 +1386,7 @@ public class FMRadio extends Activity
                                                            int whichButton) {
                                           removeDialog(DIALOG_CMD_TIMEOUT);
                                           mCommandFailed = CMD_NONE;
+                                          finish();
                                        }
                                     });
 
