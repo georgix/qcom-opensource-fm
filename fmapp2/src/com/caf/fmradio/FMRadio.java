@@ -2053,6 +2053,7 @@ public class FMRadio extends Activity
                mPresetButtons[buttonIndex].setEllipsize(TextUtils.TruncateAt.END);
                mPresetButtons[buttonIndex].setText(display);
                mPresetButtons[buttonIndex].setTag(station);
+               mPresetButtons[buttonIndex].setHeight(-1);
                addedStations++;
             }else {
                mPresetButtons[buttonIndex].setText(R.string.add_station);
