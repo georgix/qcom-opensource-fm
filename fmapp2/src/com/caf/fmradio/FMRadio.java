@@ -963,6 +963,7 @@ public class FMRadio extends Activity
                       RestoreDefaults();
                       enableRadioOnOffUI();
                       tuneRadio(FmSharedPreferences.DEFAULT_NO_FREQUENCY);
+                      FmSharedPreferences.addStation("", FmSharedPreferences.DEFAULT_NO_FREQUENCY, 0);
                   }
                }
             }
