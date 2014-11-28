@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2009-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are met:
@@ -83,6 +83,7 @@ import android.os.SystemClock;
 import android.os.Process;
 import android.app.ActivityManager;
 import android.app.ActivityManager.RunningAppProcessInfo;
+import android.media.session.MediaSession;
 
 /**
  * Provides "background" FM Radio (that uses the hardware) capabilities,
@@ -177,6 +178,7 @@ public class FMRadioService extends Service
    static final int RECORD_START = 1;
    static final int RECORD_STOP = 0;
    private Thread mRecordServiceCheckThread = null;
+   private MediaSession mSession;
 
    public FMRadioService() {
    }
@@ -205,6 +207,11 @@ public class FMRadioService extends Service
       // registering media button receiver seperately as we need to set
       // different priority for receiving media events
       registerFmMediaButtonReceiver();
+      mSession = new MediaSession(getApplicationContext(), this.getClass().getName());
+      mSession.setCallback(mSessionCallback);
+      mSession.setFlags(MediaSession.FLAG_EXCLUSIVE_GLOBAL_PRIORITY |
+                             MediaSession.FLAG_HANDLES_MEDIA_BUTTONS);
+      mSession.setActive(true);
       registerAudioBecomeNoisy();
       if ( false == SystemProperties.getBoolean("ro.fm.mulinst.recording.support",true)) {
            mSingleRecordingInstanceSupported = true;
@@ -429,37 +436,9 @@ public class FMRadioService extends Service
                          int keycode = event.getKeyCode();
                          switch (keycode) {
                              case KeyEvent.KEYCODE_HEADSETHOOK :
-                                 if (isFmOn()){
-                                     //FM should be off when Headset hook pressed.
-                                     fmOff();
-                                     if (isOrderedBroadcast()) {
-                                        abortBroadcast();
-                                     }
-                                     try {
-                                         /* Notify the UI/Activity, only if the service is "bound"
-                                            by an activity and if Callbacks are registered
-                                          */
-                                         if ((mServiceInUse) && (mCallbacks != null) ) {
-                                            mCallbacks.onDisabled();
-                                         }
-                                     } catch (RemoteException e) {
-                                         e.printStackTrace();
-                                     }
-                                 } else if( mServiceInUse ) {
-                                     fmOn();
-                                     if (isOrderedBroadcast()) {
-                                        abortBroadcast();
-                                     }
-                                     try {
-                                         /* Notify the UI/Activity, only if the service is "bound"
-                                            by an activity and if Callbacks are registered
-                                          */
-                                         if (mCallbacks != null ) {
-                                             mCallbacks.onEnabled();
-                                         }
-                                     } catch (RemoteException e) {
-                                         e.printStackTrace();
-                                     }
+                                 toggleFM();
+                                 if (isOrderedBroadcast()) {
+                                     abortBroadcast();
                                  }
                                  break;
                              case KeyEvent.KEYCODE_MEDIA_PAUSE :
@@ -777,6 +756,78 @@ public class FMRadioService extends Service
        Log.d(LOGTAG, "Sending Recording intent for = " +action);
        getApplicationContext().sendBroadcast(intent);
    }
+
+   private void toggleFM() {
+       Log.d(LOGTAG, "Toggle FM");
+       if (isFmOn()){
+           fmOff();
+           try {
+                if ((mServiceInUse) && (mCallbacks != null) ) {
+                     mCallbacks.onDisabled();
+                }
+           } catch (RemoteException e) {
+                e.printStackTrace();
+           }
+       } else if( mServiceInUse ) {
+           fmOn();
+           try {
+                if (mCallbacks != null ) {
+                    mCallbacks.onEnabled();
+                }
+           } catch (RemoteException e) {
+                e.printStackTrace();
+           }
+       }
+   }
+
+   private final MediaSession.Callback mSessionCallback = new MediaSession.Callback() {
+        @Override
+        public boolean onMediaButtonEvent(Intent intent) {
+            KeyEvent event = (KeyEvent) intent.getParcelableExtra(Intent.EXTRA_KEY_EVENT);
+            Log.d(LOGTAG, "SessionCallback.onMediaButton()...  event = " +event);
+            int key_action = event.getAction();
+            if ((event != null) && ((event.getKeyCode() == KeyEvent.KEYCODE_HEADSETHOOK)
+                                    || (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE))
+                                && (key_action == KeyEvent.ACTION_DOWN)) {
+                Log.d(LOGTAG, "SessionCallback: HEADSETHOOK/MEDIA_PLAY_PAUSE");
+                toggleFM();
+                return true;
+            } else if((event != null) && (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PAUSE)
+                       && (key_action == KeyEvent.ACTION_DOWN)) {
+                Log.d(LOGTAG, "SessionCallback: MEDIA_PAUSE");
+                if (mServiceInUse ) {
+                    fmOn();
+                    try {
+                        if (mCallbacks != null ) {
+                            mCallbacks.onEnabled();
+                        }
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                    return true;
+                }
+            } else if ((event != null) && (event.getKeyCode() == KeyEvent.KEYCODE_MEDIA_PLAY)
+                       && (key_action == KeyEvent.ACTION_DOWN)) {
+                Log.d(LOGTAG, "SessionCallback: MEDIA_PLAY");
+                if (isFmOn()){
+                    //FM should be off when Headset hook pressed.
+                    fmOff();
+                    try {
+                        /* Notify the UI/Activity, only if the service is "bound"
+                           by an activity and if Callbacks are registered
+                        */
+                        if ((mServiceInUse) && (mCallbacks != null) ) {
+                             mCallbacks.onDisabled();
+                        }
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+                    return true;
+                }
+            }
+            return false;
+        }
+   };
 
    private void startFM(){
        Log.d(LOGTAG, "In startFM");
@@ -1312,6 +1363,10 @@ public class FMRadioService extends Service
           ComponentName fmRadio = new ComponentName(this.getPackageName(),
                                   FMMediaButtonIntentReceiver.class.getName());
           mAudioManager.unregisterMediaButtonEventReceiver(fmRadio);
+          if (mSession.isActive()) {
+              Log.d(LOGTAG,"mSession is not active");
+              mSession.setActive(false);
+          }
       }
       gotoIdleState();
       mFMOn = false;
