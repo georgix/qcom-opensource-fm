@@ -177,6 +177,8 @@ public class FMRadioService extends Service
    static final int RECORD_START = 1;
    static final int RECORD_STOP = 0;
    private Thread mRecordServiceCheckThread = null;
+   private boolean mUnMuteOnFocusLoss = false;
+   private boolean mSpeakerOnFocusLoss = false;
 
    public FMRadioService() {
    }
@@ -701,8 +703,10 @@ public class FMRadioService extends Service
       cancelAlarmDealyedServiceStop();
       mServiceInUse = true;
       /* Application/UI is attached, so get out of lower power mode */
-      setLowPowerMode(false);
-      startFM();
+      if (isFmOn()) {
+          setLowPowerMode(false);
+          startFM();
+      }
       Log.d(LOGTAG, "onRebind");
    }
 
@@ -830,6 +834,8 @@ public class FMRadioService extends Service
        }
        sendRecordServiceIntent(RECORD_START);
        mPlaybackInProgress = true;
+       mUnMuteOnFocusLoss = false;
+       mSpeakerOnFocusLoss = false;
    }
 
    private void stopFM(){
@@ -1055,7 +1061,14 @@ public class FMRadioService extends Service
 
        if((TelephonyManager.CALL_STATE_OFFHOOK == state)||
           (TelephonyManager.CALL_STATE_RINGING == state)) {
-           boolean bTempSpeaker = mSpeakerPhoneOn; //need to restore SpeakerPhone
+           boolean bTempSpeaker = (mSpeakerPhoneOn | mSpeakerOnFocusLoss) ; //need to restore SpeakerPhone
+           if (mUnMuteOnFocusLoss) {
+               if (audioManager != null) {
+                   Log.d(LOGTAG, "Mute");
+                   mMuted = true;
+                   audioManager.setStreamMute(AudioManager.STREAM_MUSIC,true);
+               }
+           }
            boolean bTempMute = mMuted;// need to restore Mute status
            int bTempCall = mCallStatus;//need to restore call status
            if (isFmOn() && fmOff()) {
@@ -1183,10 +1196,13 @@ public class FMRadioService extends Service
                       if (mSpeakerPhoneOn) {
                          mSpeakerDisableHandler.removeCallbacks(mSpeakerDisableTask);
                          mSpeakerDisableHandler.postDelayed(mSpeakerDisableTask, 0);
+                         mSpeakerOnFocusLoss = true;
                       }
                       if (true == mPlaybackInProgress) {
-                          if(mMuted)
+                          if(mMuted) {
                              unMute();
+                             mUnMuteOnFocusLoss = true;
+                          }
                           stopFM();
                       }
                       if (mSpeakerPhoneOn) {
