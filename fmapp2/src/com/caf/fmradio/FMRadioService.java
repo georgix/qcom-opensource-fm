@@ -1172,6 +1172,14 @@ public class FMRadioService extends Service
                       }
                    }
               }
+          } else {
+              if (!isFmOn() && (mServiceInUse) && (mCallbacks != null)) {
+                  try {
+                      mCallbacks.onDisabled();
+                  } catch (RemoteException e) {
+                      e.printStackTrace();
+                  }
+              }
           }
        }//idle
    }
