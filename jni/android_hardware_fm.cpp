@@ -59,6 +59,7 @@
 #define WAIT_TIMEOUT 200000 /* 200*1000us */
 #define TX_RT_DELIMITER    0x0d
 #define PS_LEN    9
+pthread_mutex_t fm_buff_rd;
 enum search_dir_t {
     SEEK_UP,
     SEEK_DN,
@@ -134,6 +135,7 @@ static jint android_hardware_fmradio_FmReceiverJNI_acquireFdNative
          return FM_JNI_FAILURE;
        }
     }
+    pthread_mutex_init(&fm_buff_rd, NULL);
     return fd;
 }
 
@@ -448,6 +450,7 @@ static jint android_hardware_fmradio_FmReceiverJNI_getBufferNative
  (JNIEnv * env, jobject thiz, jint fd, jbyteArray buff, jint index)
 {
     int err;
+    pthread_mutex_lock(&fm_buff_rd);
     jboolean isCopy;
     jbyte *byte_buffer;
 
@@ -464,7 +467,7 @@ static jint android_hardware_fmradio_FmReceiverJNI_getBufferNative
     } else {
         err = FM_JNI_FAILURE;
     }
-
+    pthread_mutex_unlock(&fm_buff_rd);
     return err;
 }
 
