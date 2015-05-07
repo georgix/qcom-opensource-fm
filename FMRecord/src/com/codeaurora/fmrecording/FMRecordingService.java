@@ -246,11 +246,12 @@ public class FMRecordingService extends Service {
             return false;
 
         try {
-             mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
             if (getResources().getBoolean(R.bool.def_save_name_format_enabled)) {
                 String suffix = getResources().getString(R.string.def_save_name_suffix);
                 suffix = "".equals(suffix) ? ".3gpp" : suffix;
                 mSampleFile = createTempFile("FMRecording", suffix, sampleDir);
+            } else {
+                mSampleFile = File.createTempFile("FMRecording", ".3gpp", sampleDir);
             }
         } catch (IOException e) {
              Log.e(TAG, "Not able to access SD Card");
