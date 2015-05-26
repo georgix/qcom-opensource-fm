@@ -234,6 +234,7 @@ public class FMRadio extends Activity
 
    /* Current Status Indicators */
    private static boolean mRecording = false;
+   private static boolean mRtPlusSupported = false;
    private static boolean mIsScaning = false;
    private static boolean mIsSeeking = false;
    private static boolean mIsSearching = false;
@@ -649,6 +650,7 @@ public class FMRadio extends Activity
       MenuItem item;
       boolean radioOn = isFmOn();
       boolean recording = isRecording();
+      boolean RtPlusSupported = isRtPlusSupported();
       boolean mSpeakerPhoneOn = isSpeakerEnabled();
       boolean searchActive = isScanActive() || isSeekActive();
 
@@ -682,6 +684,9 @@ public class FMRadio extends Activity
       if (item != null) {
           item.setVisible(sleepActive && radioOn);
       }
+      item = menu.findItem(MENU_TAGS);
+      if (item != null)
+          item.setVisible(RtPlusSupported);
       return true;
    }
 
@@ -1830,6 +1835,19 @@ public class FMRadio extends Activity
          }
       }
       return(mRecording);
+   }
+
+   private boolean isRtPlusSupported() {
+      mRtPlusSupported = false;
+      if (mService != null) {
+          try {
+             mRtPlusSupported = mService.isRtPlusSupported();
+          } catch (RemoteException e) {
+             e.printStackTrace();
+         }
+      }
+      Log.d(LOGTAG, "mRtPlusSupported: " + mRtPlusSupported);
+      return(mRtPlusSupported);
    }
 
    private boolean isSpeakerEnabled() {
