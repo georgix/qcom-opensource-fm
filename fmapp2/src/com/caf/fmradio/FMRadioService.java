@@ -125,6 +125,7 @@ public class FMRadioService extends Service
    MediaRecorder mA2dp = null;
    private boolean mFMOn = false;
    private boolean mFmRecordingOn = false;
+   private static boolean mRtPlusSupport = false;
    private boolean mSpeakerPhoneOn = false;
    private int mCallStatus = 0;
    private BroadcastReceiver mScreenOnOffReceiver = null;
@@ -1512,6 +1513,11 @@ public class FMRadioService extends Service
          return(mService.get().isFmRecordingOn());
       }
 
+      public boolean isRtPlusSupported()
+      {
+         return(mService.get().isRtPlusSupported());
+      }
+
       public boolean isSpeakerEnabled()
       {
          return(mService.get().isSpeakerEnabled());
@@ -2044,6 +2050,10 @@ public class FMRadioService extends Service
 
    public boolean isFmRecordingOn() {
       return mFmRecordingOn;
+   }
+
+   public boolean isRtPlusSupported() {
+      return mRtPlusSupport;
    }
 
    public boolean isSpeakerEnabled() {
@@ -2714,6 +2724,7 @@ public class FMRadioService extends Service
 
    public void clearStationInfo() {
        if(mFMRxRDSData != null) {
+          mRtPlusSupport = false;
           mFMRxRDSData.setRadioText("");
           mFMRxRDSData.setPrgmId(0);
           mFMRxRDSData.setPrgmType(0);
@@ -3008,6 +3019,7 @@ public class FMRadioService extends Service
       {
          int tag_nums;
          Log.d(LOGTAG, "FmRxEvRTPlusInfo");
+         mRtPlusSupport =  true;
          if (mReceiver != null) {
              mFMRxRDSData = mReceiver.getRTPlusInfo();
              tag_nums = mFMRxRDSData.getTagNums();
